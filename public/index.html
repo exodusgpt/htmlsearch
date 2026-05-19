@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Page Vendor Scanner</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="scan-panel">
+        <div>
+          <p class="eyebrow">Playwright scanner</p>
+          <h1>Page Vendor Scanner</h1>
+        </div>
+        <form id="scan-form" class="scan-form">
+          <label for="url">Company URL</label>
+          <div class="input-row">
+            <input id="url" name="url" type="text" inputmode="url" placeholder="albertsons.com" autocomplete="url" required>
+            <button type="submit">Scan</button>
+          </div>
+        </form>
+        <p id="status" class="status" role="status"></p>
+      </section>
+
+      <section class="summary-grid" aria-label="Scan summary">
+        <div class="metric">
+          <span id="detected-count">0</span>
+          <p>Companies found</p>
+        </div>
+        <div class="metric">
+          <span id="request-count">0</span>
+          <p>Requests watched</p>
+        </div>
+        <div class="metric">
+          <span id="signal-count">0</span>
+          <p>Signals inspected</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>Results</h2>
+          <p id="final-url"></p>
+        </div>
+        <div id="results" class="results"></div>
+      </section>
+    </main>
+
+    <template id="result-card-template">
+      <details class="result-card">
+        <summary class="result-summary">
+          <div>
+            <h3></h3>
+            <p class="category"></p>
+          </div>
+          <div class="result-meta">
+            <span class="badge"></span>
+            <span class="expand-label">Details</span>
+          </div>
+        </summary>
+        <div class="result-details">
+          <div class="signal-tags"></div>
+          <ol class="evidence-list"></ol>
+        </div>
+      </details>
+    </template>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
