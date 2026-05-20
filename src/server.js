@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '..', 'public');
 const PORT = Number(process.env.PORT || 5173);
 const HOST = process.env.HOST || '0.0.0.0';
-const SCAN_TOKEN = process.env.SCAN_TOKEN || '';
+const SCAN_PASSWORD = process.env.SCAN_PASSWORD || 'Narrative';
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX_SCANS = Number(process.env.RATE_LIMIT_MAX_SCANS || 12);
 const scanAttemptsByIp = new Map();
@@ -35,9 +35,8 @@ function requestIp(request) {
   return request.socket.remoteAddress || 'unknown';
 }
 
-function hasValidToken(request) {
-  if (!SCAN_TOKEN) return true;
-  return request.headers['x-scan-token'] === SCAN_TOKEN;
+function hasValidPassword(request) {
+  return request.headers['x-scan-password'] === SCAN_PASSWORD;
 }
 
 function isRateLimited(ip) {
@@ -86,8 +85,8 @@ async function serveStatic(request, response) {
 const server = http.createServer(async (request, response) => {
   if (request.method === 'POST' && request.url === '/api/scan') {
     try {
-      if (!hasValidToken(request)) {
-        sendJson(response, 401, { error: 'Access token required.' });
+      if (!hasValidPassword(request)) {
+        sendJson(response, 401, { error: 'Password required.' });
         return;
       }
 
