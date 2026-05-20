@@ -9,7 +9,7 @@ const requestCountEl = document.querySelector('#request-count');
 const signalCountEl = document.querySelector('#signal-count');
 const finalUrlEl = document.querySelector('#final-url');
 const appUrl = `http://127.0.0.1:5173/${window.location.search || ''}`;
-const CLIENT_SCAN_TIMEOUT_MS = 75000;
+const CLIENT_SCAN_TIMEOUT_MS = 190000;
 const PASSWORD_STORAGE_KEY = 'htmlsearch.scanPassword';
 
 if (window.location.protocol === 'file:') {
@@ -107,7 +107,7 @@ form.addEventListener('submit', async (event) => {
     renderResults(payload);
   } catch (error) {
     const message = error.name === 'AbortError'
-      ? 'Scan stopped after 75 seconds. This page is taking too long or blocking automation; try the full https:// URL or run it again.'
+      ? 'Scan stopped after about 3 minutes. This page is taking too long or blocking automation; try the full https:// URL or run it again.'
       : error.message;
     setStatus(message, true);
   } finally {

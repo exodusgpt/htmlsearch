@@ -3,7 +3,7 @@ import net from 'node:net';
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_WAIT_MS = 3500;
-const DEFAULT_SCAN_TIMEOUT_MS = 65000;
+const DEFAULT_SCAN_TIMEOUT_MS = Number(process.env.SCAN_TIMEOUT_MS || 180000);
 
 const KNOWN_VENDORS = [
   {

@@ -46,6 +46,7 @@ Recommended environment variables:
 
 - `SCAN_PASSWORD`: optional tool password, defaults to `Narrative`
 - `RATE_LIMIT_MAX_SCANS`: optional per-IP scan limit per 10 minutes, defaults to `12`
+- `SCAN_TIMEOUT_MS`: optional scan timeout, defaults to `180000`
 
 You can also scan from the command line:
 
