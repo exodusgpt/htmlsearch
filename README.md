@@ -33,7 +33,7 @@ For a public deployment, the scanner requires a password before it will run. The
 Use a Web Service with:
 
 ```bash
-npm run render:build
+npm install && npx playwright install --with-deps chromium
 ```
 
 Start command:
