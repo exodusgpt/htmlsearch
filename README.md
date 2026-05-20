@@ -33,13 +33,13 @@ For a public deployment, set a `SCAN_TOKEN` environment variable and enter the s
 Use a Web Service with:
 
 ```bash
-npm install && npx playwright install --with-deps chromium
+npm run render:build
 ```
 
 Start command:
 
 ```bash
-npm start
+npm run render:start
 ```
 
 Recommended environment variables:

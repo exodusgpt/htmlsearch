@@ -10,7 +10,9 @@
     "scan": "node src/scan-identity.js",
     "scan:headed": "HEADLESS=false node src/scan-identity.js",
     "dev": "node src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "render:build": "PLAYWRIGHT_BROWSERS_PATH=0 npm install && PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium",
+    "render:start": "PLAYWRIGHT_BROWSERS_PATH=0 npm start"
   },
   "dependencies": {
     "playwright": "^1.52.0"
