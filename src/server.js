@@ -9,6 +9,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '..', 'public');
 const PORT = Number(process.env.PORT || 5173);
 const HOST = process.env.HOST || '0.0.0.0';
+const SCAN_TOKEN = process.env.SCAN_TOKEN || '';
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX_SCANS = Number(process.env.RATE_LIMIT_MAX_SCANS || 12);
+const scanAttemptsByIp = new Map();
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -20,6 +24,34 @@ const MIME_TYPES = {
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': MIME_TYPES['.json'] });
   response.end(JSON.stringify(payload));
+}
+
+function requestIp(request) {
+  const forwardedFor = request.headers['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor) {
+    return forwardedFor.split(',')[0].trim();
+  }
+
+  return request.socket.remoteAddress || 'unknown';
+}
+
+function hasValidToken(request) {
+  if (!SCAN_TOKEN) return true;
+  return request.headers['x-scan-token'] === SCAN_TOKEN;
+}
+
+function isRateLimited(ip) {
+  const now = Date.now();
+  const attempts = (scanAttemptsByIp.get(ip) || []).filter((timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS);
+
+  if (attempts.length >= RATE_LIMIT_MAX_SCANS) {
+    scanAttemptsByIp.set(ip, attempts);
+    return true;
+  }
+
+  attempts.push(now);
+  scanAttemptsByIp.set(ip, attempts);
+  return false;
 }
 
 async function readJson(request) {
@@ -54,6 +86,17 @@ async function serveStatic(request, response) {
 const server = http.createServer(async (request, response) => {
   if (request.method === 'POST' && request.url === '/api/scan') {
     try {
+      if (!hasValidToken(request)) {
+        sendJson(response, 401, { error: 'Access token required.' });
+        return;
+      }
+
+      const ip = requestIp(request);
+      if (isRateLimited(ip)) {
+        sendJson(response, 429, { error: 'Too many scans. Wait a few minutes and try again.' });
+        return;
+      }
+
       const { url } = await readJson(request);
       const result = await scanIdentityTools({ chromium, url });
       sendJson(response, 200, result);

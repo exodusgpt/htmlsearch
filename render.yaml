@@ -3,7 +3,7 @@ services:
     name: htmlsearch
     runtime: node
     plan: free
-    buildCommand: npm install && npx playwright install chromium
+    buildCommand: npm install && npx playwright install --with-deps chromium
     startCommand: npm start
     envVars:
       - key: NODE_ENV

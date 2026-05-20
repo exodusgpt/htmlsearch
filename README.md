@@ -26,6 +26,27 @@ Open `http://127.0.0.1:5173`, enter a company URL, and run a scan.
 
 The scanner builds a dynamic inventory from observed third-party domains and known vendor aliases. It labels evidence as SDK, HTML parameter, auth / identity call, browser storage, cookie, or network call, and exposes the exact matching evidence so you can inspect why a company was flagged.
 
+For a public deployment, set a `SCAN_TOKEN` environment variable and enter the same token in the UI before scanning. The server also blocks localhost, private IP ranges, link-local addresses, cloud metadata hostnames, and private subresource requests so the scanner cannot be used to probe internal networks.
+
+### Render
+
+Use a Web Service with:
+
+```bash
+npm install && npx playwright install --with-deps chromium
+```
+
+Start command:
+
+```bash
+npm start
+```
+
+Recommended environment variables:
+
+- `SCAN_TOKEN`: any long random password/token, required by the scanner API when set
+- `RATE_LIMIT_MAX_SCANS`: optional per-IP scan limit per 10 minutes, defaults to `12`
+
 You can also scan from the command line:
 
 ```bash

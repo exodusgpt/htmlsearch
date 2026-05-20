@@ -1,5 +1,6 @@
 const form = document.querySelector('#scan-form');
 const urlInput = document.querySelector('#url');
+const tokenInput = document.querySelector('#scan-token');
 const statusEl = document.querySelector('#status');
 const resultsEl = document.querySelector('#results');
 const template = document.querySelector('#result-card-template');
@@ -9,6 +10,7 @@ const signalCountEl = document.querySelector('#signal-count');
 const finalUrlEl = document.querySelector('#final-url');
 const appUrl = `http://127.0.0.1:5173/${window.location.search || ''}`;
 const CLIENT_SCAN_TIMEOUT_MS = 75000;
+const TOKEN_STORAGE_KEY = 'htmlsearch.scanToken';
 
 if (window.location.protocol === 'file:') {
   window.location.replace(appUrl);
@@ -25,6 +27,8 @@ function resetSummary() {
   signalCountEl.textContent = '0';
   finalUrlEl.textContent = '';
 }
+
+tokenInput.value = localStorage.getItem(TOKEN_STORAGE_KEY) || '';
 
 function renderResults(result) {
   detectedCountEl.textContent = String(result.totals.detectedCompanies ?? result.totals.detectedProducts);
@@ -68,6 +72,13 @@ form.addEventListener('submit', async (event) => {
   event.preventDefault();
   const submitButton = form.querySelector('button');
   const url = urlInput.value.trim();
+  const token = tokenInput.value.trim();
+
+  if (token) {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
 
   resetSummary();
   resultsEl.replaceChildren();
@@ -80,7 +91,10 @@ form.addEventListener('submit', async (event) => {
   try {
     const response = await fetch('/api/scan', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { 'x-scan-token': token } : {})
+      },
       body: JSON.stringify({ url }),
       signal: controller.signal
     });

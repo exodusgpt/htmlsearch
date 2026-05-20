@@ -1,3 +1,6 @@
+import dns from 'node:dns/promises';
+import net from 'node:net';
+
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_WAIT_MS = 3500;
 const DEFAULT_SCAN_TIMEOUT_MS = 65000;
@@ -175,6 +178,8 @@ const HOST_VENDOR_OVERRIDES = new Map(
 const NOISE_HOST_PREFIXES = new Set(['www', 'cdn', 'static', 'assets', 'asset', 'js', 'img', 'images', 'scripts', 'script', 'api', 'app', 'apps', 'tags', 'tag', 'pixel', 'events', 'collect', 'secure', 's']);
 const MULTIPART_TLDS = new Set(['co.uk', 'com.au', 'com.br', 'com.mx', 'co.jp', 'co.nz', 'com.sg', 'com.tr', 'com.ar', 'co.in']);
 const IGNORED_DOMAINS = new Set(['schema.org', 'w3.org', 'xmlns.com']);
+const blockedHostnames = new Set(['localhost', 'metadata.google.internal']);
+const resolvedHostSafety = new Map();
 
 function normalizeUrl(rawUrl) {
   const value = String(rawUrl || '').trim();
@@ -213,6 +218,80 @@ function navigationCandidates(rawUrl) {
   }
 
   return uniqueBy(candidates.map((candidate) => candidate.toString()), (candidate) => candidate);
+}
+
+function ipv4ToNumber(ip) {
+  return ip.split('.').reduce((sum, octet) => (sum * 256) + Number(octet), 0);
+}
+
+function ipv4InRange(ip, start, end) {
+  const value = ipv4ToNumber(ip);
+  return value >= ipv4ToNumber(start) && value <= ipv4ToNumber(end);
+}
+
+function isBlockedIp(ip) {
+  const version = net.isIP(ip);
+  if (version === 4) {
+    return [
+      ['0.0.0.0', '0.255.255.255'],
+      ['10.0.0.0', '10.255.255.255'],
+      ['100.64.0.0', '100.127.255.255'],
+      ['127.0.0.0', '127.255.255.255'],
+      ['169.254.0.0', '169.254.255.255'],
+      ['172.16.0.0', '172.31.255.255'],
+      ['192.0.0.0', '192.0.0.255'],
+      ['192.168.0.0', '192.168.255.255'],
+      ['198.18.0.0', '198.19.255.255'],
+      ['224.0.0.0', '255.255.255.255']
+    ].some(([start, end]) => ipv4InRange(ip, start, end));
+  }
+
+  if (version === 6) {
+    const normalized = ip.toLowerCase();
+    return normalized === '::1'
+      || normalized === '::'
+      || normalized.startsWith('fc')
+      || normalized.startsWith('fd')
+      || normalized.startsWith('fe80:')
+      || normalized.startsWith('ff');
+  }
+
+  return true;
+}
+
+async function assertPublicUrl(urlString) {
+  const url = new URL(urlString);
+  const hostname = url.hostname.toLowerCase();
+
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new Error('Only HTTP and HTTPS URLs can be scanned.');
+  }
+
+  if (blockedHostnames.has(hostname) || hostname.endsWith('.local')) {
+    throw new Error('Private, local, and metadata hostnames cannot be scanned.');
+  }
+
+  if (net.isIP(hostname)) {
+    if (isBlockedIp(hostname)) {
+      throw new Error('Private, local, and reserved IP addresses cannot be scanned.');
+    }
+    return;
+  }
+
+  if (resolvedHostSafety.has(hostname)) {
+    if (!resolvedHostSafety.get(hostname)) {
+      throw new Error('This hostname resolves to a private or reserved IP address.');
+    }
+    return;
+  }
+
+  const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+  const isSafe = addresses.length > 0 && addresses.every((address) => !isBlockedIp(address.address));
+  resolvedHostSafety.set(hostname, isSafe);
+
+  if (!isSafe) {
+    throw new Error('This hostname resolves to a private or reserved IP address.');
+  }
 }
 
 function compact(value, maxLength = 320) {
@@ -474,6 +553,10 @@ async function collectDomSignals(page) {
 
 export async function scanIdentityTools({ chromium, url, headless = true, waitMs = DEFAULT_WAIT_MS, timeoutMs = DEFAULT_TIMEOUT_MS, scanTimeoutMs = DEFAULT_SCAN_TIMEOUT_MS }) {
   const candidates = navigationCandidates(url);
+  for (const candidate of candidates) {
+    await assertPublicUrl(candidate);
+  }
+
   const browser = await chromium.launch({ headless });
   const timeoutId = setTimeout(() => {
     browser.close().catch(() => {});
@@ -484,6 +567,15 @@ export async function scanIdentityTools({ chromium, url, headless = true, waitMs
   });
   const page = await context.newPage();
   const networkSignals = [];
+
+  await page.route('**/*', async (route) => {
+    try {
+      await assertPublicUrl(route.request().url());
+      await route.continue();
+    } catch {
+      await route.abort('blockedbyclient');
+    }
+  });
 
   page.on('request', (request) => {
     networkSignals.push({
