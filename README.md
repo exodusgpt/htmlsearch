@@ -39,7 +39,7 @@ npm run render:build
 Start command:
 
 ```bash
-npm run render:start
+npm start
 ```
 
 Recommended environment variables:

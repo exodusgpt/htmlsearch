@@ -1,9 +1,10 @@
-import { chromium } from 'playwright';
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanIdentityTools } from './identity-detector.js';
+
+process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '..', 'public');
@@ -97,6 +98,7 @@ const server = http.createServer(async (request, response) => {
       }
 
       const { url } = await readJson(request);
+      const { chromium } = await import('playwright');
       const result = await scanIdentityTools({ chromium, url });
       sendJson(response, 200, result);
     } catch (error) {

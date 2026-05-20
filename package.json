@@ -7,12 +7,12 @@
     "crawl": "node src/crawl-narrative.js",
     "crawl:headed": "HEADLESS=false node src/crawl-narrative.js",
     "summarize": "SUMMARIZE_ONLY=true node src/crawl-narrative.js",
-    "scan": "node src/scan-identity.js",
-    "scan:headed": "HEADLESS=false node src/scan-identity.js",
-    "dev": "node src/server.js",
-    "start": "node src/server.js",
+    "scan": "PLAYWRIGHT_BROWSERS_PATH=0 node src/scan-identity.js",
+    "scan:headed": "PLAYWRIGHT_BROWSERS_PATH=0 HEADLESS=false node src/scan-identity.js",
+    "dev": "PLAYWRIGHT_BROWSERS_PATH=0 node src/server.js",
+    "start": "PLAYWRIGHT_BROWSERS_PATH=0 node src/server.js",
     "render:build": "PLAYWRIGHT_BROWSERS_PATH=0 npm install && PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium",
-    "render:start": "PLAYWRIGHT_BROWSERS_PATH=0 npm start"
+    "render:start": "npm start"
   },
   "dependencies": {
     "playwright": "^1.52.0"

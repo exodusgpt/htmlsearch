@@ -1,7 +1,8 @@
-import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { scanIdentityTools } from './identity-detector.js';
+
+process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
 
 const url = process.argv[2] || process.env.SCAN_URL;
 const OUTPUT_DIR = path.resolve('output');
@@ -26,6 +27,7 @@ if (!url) {
 } else {
   try {
     await fs.mkdir(OUTPUT_DIR, { recursive: true });
+    const { chromium } = await import('playwright');
     const result = await scanIdentityTools({
       chromium,
       url,
