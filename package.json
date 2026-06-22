@@ -15,7 +15,7 @@
     "dev": "node src/server.js",
     "start": "node src/server.js",
     "postinstall": "npx playwright install chromium",
-    "render:build": "npm install && npx playwright install --with-deps chromium",
+    "render:build": "npm install",
     "render:start": "npm start"
   },
   "dependencies": {
