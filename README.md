@@ -68,7 +68,7 @@ npm run render:start
 Recommended environment variables:
 
 - `SCAN_PASSWORD`: set this to a strong password
-- `AMAZON_JOB_DIR`: set to `/var/data/amazon-jobs` if using the included Render disk
+- `AMAZON_JOB_DIR`: optional directory for persisted job files if you later add a paid persistent disk
 - `MAX_CONCURRENT_AMAZON_JOBS`: set to `1`
 - `RATE_LIMIT_MAX_SCANS`: optional per-IP scan limit per 10 minutes, defaults to `12`
 - `SCAN_TIMEOUT_MS`: optional scan timeout, defaults to `180000`
