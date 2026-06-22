@@ -2,18 +2,12 @@ services:
   - type: web
     name: amazon-fresh-price-agent
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm run render:build
     startCommand: npm run render:start
-    disk:
-      name: amazon-jobs
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
-      - key: AMAZON_JOB_DIR
-        value: /var/data/amazon-jobs
       - key: MAX_CONCURRENT_AMAZON_JOBS
         value: 1
       - key: RATE_LIMIT_MAX_SCANS

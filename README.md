@@ -73,7 +73,7 @@ Recommended environment variables:
 - `RATE_LIMIT_MAX_SCANS`: optional per-IP scan limit per 10 minutes, defaults to `12`
 - `SCAN_TIMEOUT_MS`: optional scan timeout, defaults to `180000`
 
-The included `render.yaml` creates a Node web service named `amazon-fresh-price-agent`, installs Playwright Chromium during build, mounts a 1 GB disk at `/var/data`, and stores job results under `/var/data/amazon-jobs`.
+The included `render.yaml` creates a free Render Node web service named `amazon-fresh-price-agent` and installs Playwright Chromium during build. On the free plan, job JSON files are stored on Render's ephemeral filesystem, so they can disappear after redeploys or service restarts. Add a paid persistent disk later if you need durable job history.
 
 To get it live on Render:
 
@@ -86,7 +86,7 @@ To get it live on Render:
 7. Enter the password, product names or Fresh ASINs, and run a job.
 8. Watch the job status until it completes, then download the CSV.
 
-For a fully public audience, keep the password private or replace it with real user accounts before sharing the URL broadly. Amazon may block cloud-hosted browser automation more aggressively than local runs, so expect to test with a small product list first.
+For a fully public audience, keep the password private or replace it with real user accounts before sharing the URL broadly. Amazon may block cloud-hosted browser automation more aggressively than local runs, so expect to test with a small product list first. Render's free instance is also small, so Playwright jobs may be slow or fail under memory pressure; use the free plan for testing before paying for a larger instance.
 
 You can also scan from the command line:
 
