@@ -86,9 +86,67 @@ async function dismissInterruptions(page) {
 
 async function detectBlock(page) {
   const body = await textContent(page.locator('body'));
-  if (/captcha|enter the characters you see|sorry, we just need to make sure/i.test(body)) {
+  if (/captcha|enter the characters you see|sorry, we just need to make sure|robot check|automated access/i.test(body)) {
     throw new Error('Amazon showed an automation/CAPTCHA check. Run headed mode or try again later.');
   }
+}
+
+async function pageDiagnostic(page) {
+  try {
+    return await page.evaluate(() => {
+      const text = document.body?.innerText?.replace(/\s+/g, ' ').trim() || '';
+      return {
+        title: document.title,
+        url: location.href,
+        text: text.slice(0, 220)
+      };
+    });
+  } catch {
+    return { title: '', url: page.url(), text: '' };
+  }
+}
+
+async function setDeliveryZipViaAjax(page, zip) {
+  const result = await page.evaluate(async (targetZip) => {
+    const body = new URLSearchParams({
+      locationType: 'LOCATION_INPUT',
+      zipCode: targetZip,
+      storeContext: 'generic',
+      deviceType: 'web',
+      pageType: 'Gateway',
+      actionSource: 'glow'
+    });
+
+    try {
+      const response = await fetch('/gp/delivery/ajax/address-change.html', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'x-requested-with': 'XMLHttpRequest'
+        },
+        body: body.toString()
+      });
+      const text = await response.text();
+      return {
+        ok: response.ok,
+        status: response.status,
+        text: text.replace(/\s+/g, ' ').slice(0, 500)
+      };
+    } catch (error) {
+      return { ok: false, status: 0, text: error.message };
+    }
+  }, zip);
+
+  if (!result.ok) {
+    throw new Error(`Amazon ZIP AJAX update failed with status ${result.status}: ${result.text}`);
+  }
+
+  if (/captcha|robot check|automated access|enter the characters/i.test(result.text)) {
+    throw new Error('Amazon returned a CAPTCHA/robot-check response while setting the ZIP.');
+  }
+
+  await page.waitForTimeout(1000);
 }
 
 async function setDeliveryZip(page, zip) {
@@ -96,14 +154,25 @@ async function setDeliveryZip(page, zip) {
   await dismissInterruptions(page);
   await detectBlock(page);
 
+  try {
+    await setDeliveryZipViaAjax(page, zip);
+    return;
+  } catch {
+    // Fall back to the visible picker; Amazon changes this flow often.
+  }
+
   const opened = await clickFirst(page, [
     '#nav-global-location-popover-link',
     '#glow-ingress-block',
-    '[data-action-type="SELECT_LOCATION"]'
+    '#glow-ingress-line2',
+    '[data-action-type="SELECT_LOCATION"]',
+    'a:has-text("Deliver to")',
+    'span:has-text("Deliver to")'
   ]);
 
   if (!opened) {
-    throw new Error(`Could not open Amazon delivery location picker for ZIP ${zip}.`);
+    const diagnostic = await pageDiagnostic(page);
+    throw new Error(`Could not open Amazon delivery location picker for ZIP ${zip}. Page "${diagnostic.title}" at ${diagnostic.url}. Text: ${diagnostic.text}`);
   }
 
   const zipInput = page.locator('#GLUXZipUpdateInput, input[aria-label*="ZIP"], input[placeholder*="ZIP"]').first();
