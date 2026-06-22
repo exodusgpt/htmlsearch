@@ -27,7 +27,7 @@ Open `http://127.0.0.1:5173`, enter a company URL, and run a scan.
 
 The scanner builds a dynamic inventory from observed third-party domains and known vendor aliases. It labels evidence as SDK, HTML parameter, auth / identity call, browser storage, cookie, or network call, and exposes the exact matching evidence so you can inspect why a company was flagged.
 
-For a public deployment, the scanner requires a password before it will run. The default password is `Narrative`; set `SCAN_PASSWORD` in Render if you want to change it. The server also blocks localhost, private IP ranges, link-local addresses, cloud metadata hostnames, and private subresource requests so the scanner cannot be used to probe internal networks.
+For a public deployment, the scanner requires a password before it will run. The default password is `SaraTest`; set `SCAN_PASSWORD` in Render if you want to change it. The server also blocks localhost, private IP ranges, link-local addresses, cloud metadata hostnames, and private subresource requests so the scanner cannot be used to probe internal networks.
 
 ### Amazon Price Agent
 
