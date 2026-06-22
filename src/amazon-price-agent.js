@@ -3,6 +3,7 @@ const AMAZON_ORIGIN = 'https://www.amazon.com';
 const AMAZON_FRESH_DEPARTMENT = 'amazonfresh';
 const DEFAULT_TIMEOUT_MS = 45000;
 const DEFAULT_LIMIT_PER_PRODUCT = 8;
+const DEFAULT_JOB_TIMEOUT_MS = 8 * 60 * 1000;
 
 function cleanLines(value) {
   if (Array.isArray(value)) {
@@ -149,18 +150,21 @@ async function setDeliveryZipViaAjax(page, zip) {
   await page.waitForTimeout(1000);
 }
 
-async function setDeliveryZip(page, zip) {
+async function setDeliveryZip(page, zip, onProgress) {
+  await onProgress?.(`Opening Amazon for ZIP ${zip}.`);
   await page.goto(AMAZON_ORIGIN, { waitUntil: 'domcontentloaded', timeout: DEFAULT_TIMEOUT_MS });
   await dismissInterruptions(page);
   await detectBlock(page);
 
   try {
+    await onProgress?.(`Setting ZIP ${zip} through Amazon location request.`);
     await setDeliveryZipViaAjax(page, zip);
     return;
   } catch {
     // Fall back to the visible picker; Amazon changes this flow often.
   }
 
+  await onProgress?.(`Opening Amazon location picker for ZIP ${zip}.`);
   const opened = await clickFirst(page, [
     '#nav-global-location-popover-link',
     '#glow-ingress-block',
@@ -203,7 +207,9 @@ function amazonFreshSearchUrl(query) {
 }
 
 async function extractSearchResults(page, productName, zip, limit) {
+  await page.waitForTimeout(500);
   const url = amazonFreshSearchUrl(productName);
+  const diagnosticBefore = await pageDiagnostic(page);
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: DEFAULT_TIMEOUT_MS });
   await dismissInterruptions(page);
   await detectBlock(page);
@@ -212,6 +218,11 @@ async function extractSearchResults(page, productName, zip, limit) {
   const cards = page.locator('[data-component-type="s-search-result"][data-asin]');
   const count = Math.min(await cards.count(), limit);
   const rows = [];
+
+  if (!count) {
+    const diagnostic = await pageDiagnostic(page);
+    throw new Error(`No Amazon Fresh result cards for "${productName}" in ZIP ${zip}. Before search: "${diagnosticBefore.title}". Search page: "${diagnostic.title}" at ${diagnostic.url}. Text: ${diagnostic.text}`);
+  }
 
   for (let index = 0; index < count; index += 1) {
     const card = cards.nth(index);
@@ -267,10 +278,21 @@ async function extractSku(page, sku, zip) {
 
 export async function scanAmazonPrices({ chromium, ...input }) {
   const options = normalizeAmazonInput(input);
+  const onProgress = typeof input.onProgress === 'function' ? input.onProgress : null;
+  const timeoutMs = Number(input.timeoutMs || process.env.AMAZON_JOB_TIMEOUT_MS || DEFAULT_JOB_TIMEOUT_MS);
+  let timedOut = false;
+
+  await onProgress?.('Launching Chromium.');
   const browser = await chromium.launch({
     headless: process.env.HEADLESS !== 'false',
     args: ['--disable-blink-features=AutomationControlled']
   });
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    browser.close().catch(() => {});
+  }, timeoutMs);
+  timeout.unref?.();
+
   const context = await browser.newContext({
     locale: 'en-US',
     timezoneId: 'America/New_York',
@@ -284,15 +306,20 @@ export async function scanAmazonPrices({ chromium, ...input }) {
 
   try {
     for (const zip of options.zipCodes) {
+      if (timedOut) throw new Error(`Amazon Fresh job timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+
       try {
-        await setDeliveryZip(page, zip);
+        await setDeliveryZip(page, zip, onProgress);
       } catch (error) {
         errors.push({ zip, message: error.message });
         continue;
       }
 
       for (const product of options.products) {
+        if (timedOut) throw new Error(`Amazon Fresh job timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+
         try {
+          await onProgress?.(`Searching Amazon Fresh for "${product}" in ZIP ${zip}.`);
           rows.push(...await extractSearchResults(page, product, zip, options.limitPerProduct));
         } catch (error) {
           errors.push({ zip, query: product, message: error.message });
@@ -300,7 +327,10 @@ export async function scanAmazonPrices({ chromium, ...input }) {
       }
 
       for (const sku of options.skus) {
+        if (timedOut) throw new Error(`Amazon Fresh job timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+
         try {
+          await onProgress?.(`Looking up Fresh ASIN ${sku} in ZIP ${zip}.`);
           rows.push(await extractSku(page, sku, zip));
         } catch (error) {
           errors.push({ zip, query: sku, message: error.message });
@@ -308,6 +338,7 @@ export async function scanAmazonPrices({ chromium, ...input }) {
       }
     }
   } finally {
+    clearTimeout(timeout);
     await browser.close();
   }
 

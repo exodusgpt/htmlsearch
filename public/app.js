@@ -123,7 +123,7 @@ function describeJob(job) {
   }
 
   if (job.status === 'running') {
-    return `Running job ${job.id}. Amazon Fresh checks can take several minutes.`;
+    return job.progress ? `Running job ${job.id}. ${job.progress}` : `Running job ${job.id}. Amazon Fresh checks can take several minutes.`;
   }
 
   if (job.status === 'completed') {

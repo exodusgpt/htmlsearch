@@ -16,6 +16,7 @@ const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX_SCANS = Number(process.env.RATE_LIMIT_MAX_SCANS || 12);
 const MAX_CONCURRENT_AMAZON_JOBS = Math.max(1, Number(process.env.MAX_CONCURRENT_AMAZON_JOBS || 1));
 const MAX_JSON_BODY_BYTES = Number(process.env.MAX_JSON_BODY_BYTES || 64 * 1024);
+const AMAZON_JOB_TIMEOUT_MS = Number(process.env.AMAZON_JOB_TIMEOUT_MS || 8 * 60 * 1000);
 const scanAttemptsByIp = new Map();
 const amazonJobs = new Map();
 const amazonQueue = [];
@@ -54,6 +55,7 @@ function publicJob(job) {
     input: job.input,
     result: job.result,
     error: job.error,
+    progress: job.progress,
     position: job.status === 'queued' ? amazonQueue.indexOf(job.id) + 1 : 0
   };
 }
@@ -95,16 +97,28 @@ async function runAmazonJob(job) {
   job.status = 'running';
   job.startedAt = new Date().toISOString();
   job.updatedAt = job.startedAt;
+  job.progress = 'Starting browser.';
   await persistAmazonJob(job);
 
   try {
     const { chromium } = await import('playwright');
-    const result = await scanAmazonPrices({ chromium, ...job.input });
+    const result = await scanAmazonPrices({
+      chromium,
+      ...job.input,
+      timeoutMs: AMAZON_JOB_TIMEOUT_MS,
+      onProgress: async (progress) => {
+        job.progress = progress;
+        job.updatedAt = new Date().toISOString();
+        await persistAmazonJob(job);
+      }
+    });
     job.status = 'completed';
     job.result = result;
+    job.progress = 'Completed.';
   } catch (error) {
     job.status = 'failed';
     job.error = error.message;
+    job.progress = 'Failed.';
   } finally {
     job.finishedAt = new Date().toISOString();
     job.updatedAt = job.finishedAt;
@@ -125,6 +139,7 @@ async function createAmazonJob(input, ip) {
     input: normalizedInput,
     result: null,
     error: null,
+    progress: 'Queued.',
     ip
   };
 
