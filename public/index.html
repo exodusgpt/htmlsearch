@@ -3,70 +3,84 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Page Vendor Scanner</title>
+    <title>Amazon Price Agent</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <main class="shell">
       <section class="scan-panel">
         <div>
-          <p class="eyebrow">Playwright scanner</p>
-          <h1>Page Vendor Scanner</h1>
+          <p class="eyebrow">Playwright agent</p>
+          <h1>Amazon Price Agent</h1>
+          <p class="subtitle">Amazon Fresh only</p>
         </div>
-        <form id="scan-form" class="scan-form">
-          <label for="url">Company URL</label>
-          <div class="input-row">
-            <input id="url" name="url" type="text" inputmode="url" placeholder="albertsons.com" autocomplete="url" required>
-            <button type="submit">Scan</button>
+        <form id="price-form" class="scan-form">
+          <div class="form-grid">
+            <div class="field">
+              <label for="products">Product names</label>
+              <textarea id="products" name="products" rows="5" spellcheck="false">Haagen Daaz 14 oz</textarea>
+            </div>
+            <div class="field">
+              <label for="skus">SKU / ASIN list</label>
+              <textarea id="skus" name="skus" rows="5" spellcheck="false" placeholder="Optional: one Fresh ASIN per line"></textarea>
+            </div>
           </div>
-          <label for="scan-password">Password</label>
-          <input id="scan-password" name="scan-password" type="password" autocomplete="current-password" placeholder="Enter tool password" required>
+          <div class="form-grid compact">
+            <div class="field">
+              <label for="zip-codes">ZIP codes</label>
+              <input id="zip-codes" name="zip-codes" type="text" value="10001, 75201, 60601, 90041" required>
+            </div>
+            <div class="field">
+              <label for="limit">Results per product</label>
+              <input id="limit" name="limit" type="number" value="8" min="1" max="20" required>
+            </div>
+            <div class="field">
+              <label for="scan-password">Password</label>
+              <input id="scan-password" name="scan-password" type="password" autocomplete="current-password" placeholder="Enter tool password" required>
+            </div>
+          </div>
+          <button type="submit">Run agent</button>
         </form>
         <p id="status" class="status" role="status"></p>
       </section>
 
       <section class="summary-grid" aria-label="Scan summary">
         <div class="metric">
-          <span id="detected-count">0</span>
-          <p>Companies found</p>
+          <span id="row-count">0</span>
+          <p>Price rows</p>
         </div>
         <div class="metric">
-          <span id="request-count">0</span>
-          <p>Requests watched</p>
+          <span id="zip-count">4</span>
+          <p>ZIP codes</p>
         </div>
         <div class="metric">
-          <span id="signal-count">0</span>
-          <p>Signals inspected</p>
+          <span id="error-count">0</span>
+          <p>Warnings</p>
         </div>
       </section>
 
       <section>
         <div class="section-title">
-          <h2>Results</h2>
-          <p id="final-url"></p>
+          <h2>Amazon Fresh SKU Prices</h2>
+          <button id="download-csv" class="secondary-button" type="button" disabled>Download CSV</button>
         </div>
-        <div id="results" class="results"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ZIP</th>
+                <th>SKU</th>
+                <th>Price</th>
+                <th>Product</th>
+                <th>Source</th>
+              </tr>
+            </thead>
+            <tbody id="results"></tbody>
+          </table>
+        </div>
+        <div id="warnings" class="warnings" aria-live="polite"></div>
       </section>
     </main>
-
-    <template id="result-card-template">
-      <details class="result-card">
-        <summary class="result-summary">
-          <div>
-            <h3></h3>
-            <p class="category"></p>
-          </div>
-          <div class="result-meta">
-            <span class="badge"></span>
-            <span class="expand-label">Details</span>
-          </div>
-        </summary>
-        <div class="result-details">
-          <div class="signal-tags"></div>
-          <ol class="evidence-list"></ol>
-        </div>
-      </details>
-    </template>
 
     <script src="/app.js" type="module"></script>
   </body>
