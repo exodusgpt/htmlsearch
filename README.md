@@ -37,7 +37,7 @@ Start the local UI:
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173`, enter product names and optional SKU / ASIN values, then run the agent. Searches are constrained to the Amazon Fresh department. Explicit SKU / ASIN values are also looked up through Amazon Fresh search, so non-Fresh ASINs are reported as warnings instead of returning general Amazon prices. The default ZIP codes are `10001`, `75201`, `60601`, and `90041`, and the default product is `Haagen Daaz 14 oz`.
+Open `http://127.0.0.1:5173`, enter product names and optional SKU / ASIN values, then run the agent. Searches are constrained to the Amazon Fresh department. Explicit SKU / ASIN values are also looked up through Amazon Fresh search, so non-Fresh ASINs are reported as warnings instead of returning general Amazon prices. The default ZIP codes are `10001`, `75201`, `60601`, and `90041`, and the default product is `Haagen Dazs 14 oz`.
 
 Amazon may show CAPTCHA or automation checks. If that happens, run with `HEADLESS=false npm run dev` so you can watch the browser and handle any manual challenge.
 

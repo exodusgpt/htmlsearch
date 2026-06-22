@@ -66,15 +66,41 @@ async function clickFirst(page, selectors, timeout = 3500) {
   return false;
 }
 
+async function clickByText(page, labels, timeout = 3500) {
+  const deadline = Date.now() + timeout;
+
+  while (Date.now() < deadline) {
+    const clicked = await page.evaluate((targetLabels) => {
+      const normalize = (value) => value?.replace(/\s+/g, ' ').trim().toLowerCase() || '';
+      const labelsLower = targetLabels.map((label) => label.toLowerCase());
+      const candidates = [...document.querySelectorAll('button, input, a, span')];
+
+      for (const element of candidates) {
+        const text = normalize(element.innerText || element.value || element.getAttribute('aria-label'));
+        if (!text || !labelsLower.some((label) => text.includes(label))) continue;
+
+        element.click();
+        return true;
+      }
+
+      return false;
+    }, labels).catch(() => false);
+
+    if (clicked) return true;
+    await page.waitForTimeout(250);
+  }
+
+  return false;
+}
+
 async function dismissInterruptions(page) {
   await clickFirst(page, [
     'input[data-action-type="DISMISS"]',
-    'button:has-text("Dismiss")',
-    'button:has-text("Continue shopping")',
     'input[aria-labelledby*="continue"]',
     '#sp-cc-accept',
     'input[name="accept"]'
   ], 1200);
+  await clickByText(page, ['Dismiss', 'Continue shopping'], 1200);
 }
 
 async function detectBlock(page) {
@@ -161,10 +187,8 @@ async function setDeliveryZip(page, zip, onProgress) {
     '#nav-global-location-popover-link',
     '#glow-ingress-block',
     '#glow-ingress-line2',
-    '[data-action-type="SELECT_LOCATION"]',
-    'a:has-text("Deliver to")',
-    'span:has-text("Deliver to")'
-  ]);
+    '[data-action-type="SELECT_LOCATION"]'
+  ]) || await clickByText(page, ['Deliver to'], 3500);
 
   if (!opened) {
     const diagnostic = await pageDiagnostic(page);
@@ -178,16 +202,15 @@ async function setDeliveryZip(page, zip, onProgress) {
     '#GLUXZipUpdate',
     'input[aria-labelledby="GLUXZipUpdate-announce"]',
     'input[name="glowDoneButton"]',
-    'input[type="submit"][aria-label*="Apply"]',
-    'button:has-text("Apply")'
-  ], DEFAULT_TIMEOUT_MS);
+    'input[type="submit"][aria-label*="Apply"]'
+  ], DEFAULT_TIMEOUT_MS) || await clickByText(page, ['Apply'], DEFAULT_TIMEOUT_MS);
 
   await page.waitForTimeout(1500);
   await clickFirst(page, [
     '#GLUXConfirmClose',
-    'button:has-text("Done")',
     'input[aria-labelledby="GLUXConfirmClose-announce"]'
   ], 2500);
+  await clickByText(page, ['Done'], 2500);
   await page.waitForLoadState('domcontentloaded', { timeout: DEFAULT_TIMEOUT_MS }).catch(() => {});
   await dismissInterruptions(page);
 }
@@ -199,21 +222,25 @@ function amazonFreshSearchUrl(query) {
   return url.toString();
 }
 
+function queryVariants(query) {
+  const variants = [query];
+  const normalized = query.replace(/\s+/g, ' ').trim();
+
+  if (/haagen\s+daaz/i.test(normalized)) {
+    variants.push(normalized.replace(/haagen\s+daaz/ig, 'Haagen Dazs'));
+    variants.push(normalized.replace(/haagen\s+daaz/ig, 'Häagen-Dazs'));
+  }
+
+  if (/haagen\s+dazs/i.test(normalized)) {
+    variants.push(normalized.replace(/haagen\s+dazs/ig, 'Häagen-Dazs'));
+  }
+
+  return [...new Set(variants)];
+}
+
 async function extractResultCards(page, query, zip, source, limit) {
   return page.evaluate(({ limit: resultLimit, query: productQuery, source: resultSource, zip: resultZip }) => {
     const clean = (value) => value?.replace(/\s+/g, ' ').trim() || '';
-    const first = (root, selectors) => {
-      for (const selector of selectors) {
-        try {
-          const match = root.querySelector(selector);
-          if (match) return match;
-        } catch {
-          // Some hosted browser builds are pickier about selector syntax.
-        }
-      }
-
-      return null;
-    };
     const absolutize = (href) => {
       try {
         return href ? new URL(href, location.origin).toString() : location.href;
@@ -221,31 +248,32 @@ async function extractResultCards(page, query, zip, source, limit) {
         return location.href;
       }
     };
+    const descendants = (root) => [...root.getElementsByTagName('*')];
+    const hasClass = (element, className) => element.classList?.contains(className);
+    const attr = (element, name) => element.getAttribute?.(name) || '';
+    const includesAttr = (element, name, value) => attr(element, name).includes(value);
+    const firstElement = (root, predicate) => descendants(root).find(predicate) || null;
+    const nearestLink = (root) => firstElement(root, (element) => {
+      if (element.tagName !== 'A') return false;
+      const href = attr(element, 'href');
+      return href.includes('/dp/') || href.includes('/gp/product/') || hasClass(element, 'a-link-normal');
+    });
 
-    return [...document.querySelectorAll('[data-asin]')]
+    return [...document.getElementsByTagName('*')]
+      .filter((element) => element.hasAttribute?.('data-asin'))
       .map((card) => {
         const sku = card.getAttribute('data-asin')?.trim();
         if (!sku) return null;
 
-        const titleEl = first(card, [
-          'h2 span',
-          'h2 a span',
-          '[data-cy="title-recipe"] span',
-          'a[aria-label]',
-          '[aria-label]'
-        ]);
-        const linkEl = first(card, [
-          'h2 a[href]',
-          'a.a-link-normal.s-no-outline[href]',
-          'a[href*="/dp/"]',
-          'a[href*="/gp/product/"]'
-        ]);
-        const priceEl = first(card, [
-          '.a-price .a-offscreen',
-          '[data-a-color="price"] .a-offscreen',
-          '.a-color-price',
-          '[class*="price"] .a-offscreen'
-        ]);
+        const titleEl = firstElement(card, (element) => {
+          const aria = attr(element, 'aria-label');
+          return element.tagName === 'H2' || includesAttr(element, 'data-cy', 'title') || (element.tagName === 'A' && Boolean(aria));
+        });
+        const linkEl = nearestLink(card);
+        const priceEl = firstElement(card, (element) => {
+          const className = attr(element, 'class').toLowerCase();
+          return hasClass(element, 'a-offscreen') || hasClass(element, 'a-color-price') || className.includes('price');
+        });
         const title = clean(titleEl?.textContent) || clean(titleEl?.getAttribute?.('aria-label')) || clean(linkEl?.textContent);
         const price = clean(priceEl?.textContent);
 
@@ -267,14 +295,14 @@ async function extractResultCards(page, query, zip, source, limit) {
   }, { limit, query, source, zip });
 }
 
-async function extractSearchResults(page, productName, zip, limit) {
+async function extractSearchResultsForQuery(page, productName, zip, limit) {
   await page.waitForTimeout(500);
   const url = amazonFreshSearchUrl(productName);
   const diagnosticBefore = await pageDiagnostic(page);
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: DEFAULT_TIMEOUT_MS });
   await dismissInterruptions(page);
   await detectBlock(page);
-  await page.waitForSelector('[data-component-type="s-search-result"], [data-asin]', { timeout: DEFAULT_TIMEOUT_MS }).catch(() => {});
+  await page.waitForTimeout(1500);
 
   const rows = await extractResultCards(page, productName, zip, 'amazon-fresh-search', limit);
 
@@ -286,12 +314,26 @@ async function extractSearchResults(page, productName, zip, limit) {
   return rows;
 }
 
+async function extractSearchResults(page, productName, zip, limit) {
+  const failures = [];
+
+  for (const variant of queryVariants(productName)) {
+    try {
+      return await extractSearchResultsForQuery(page, variant, zip, limit);
+    } catch (error) {
+      failures.push(`${variant}: ${error.message}`);
+    }
+  }
+
+  throw new Error(`No Amazon Fresh result cards after trying query variants. ${failures.join(' | ')}`);
+}
+
 async function extractSku(page, sku, zip) {
   const url = amazonFreshSearchUrl(sku);
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: DEFAULT_TIMEOUT_MS });
   await dismissInterruptions(page);
   await detectBlock(page);
-  await page.waitForSelector('[data-component-type="s-search-result"], [data-asin]', { timeout: DEFAULT_TIMEOUT_MS }).catch(() => {});
+  await page.waitForTimeout(1500);
 
   const rows = await extractResultCards(page, sku, zip, 'amazon-fresh-sku-search', 20);
   const row = rows.find((result) => result.sku === sku);
