@@ -75,7 +75,7 @@ Recommended environment variables:
 
 The included `render.yaml` creates a free Render Node web service named `amazon-fresh-price-agent` and installs Playwright Chromium during build. On the free plan, job JSON files are stored on Render's ephemeral filesystem, so they can disappear after redeploys or service restarts. Add a paid persistent disk later if you need durable job history.
 
-The Render build intentionally does not use `npx playwright install --with-deps` because Render's free Node runtime cannot switch to root during build. It runs `npm install && npx playwright install chromium` so the browser binary is present without trying to install system packages.
+The Render build intentionally does not use `npx playwright install --with-deps` because Render's free Node runtime cannot switch to root during build. It sets `PLAYWRIGHT_BROWSERS_PATH=0` and runs `npm install && PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium` so the browser binary is bundled with the app instead of relying on Render's cache directory.
 
 To get it live on Render:
 
