@@ -54,8 +54,8 @@ async function textContent(locator) {
 
 async function clickFirst(page, selectors, timeout = 3500) {
   for (const selector of selectors) {
-    const locator = page.locator(selector).first();
     try {
+      const locator = page.locator(selector).first();
       await locator.click({ timeout });
       return true;
     } catch {
@@ -177,7 +177,8 @@ async function setDeliveryZip(page, zip, onProgress) {
   await clickFirst(page, [
     '#GLUXZipUpdate',
     'input[aria-labelledby="GLUXZipUpdate-announce"]',
-    'span:has-text("Apply") >> xpath=ancestor::span[contains(@class, "a-button")]//input',
+    'input[name="glowDoneButton"]',
+    'input[type="submit"][aria-label*="Apply"]',
     'button:has-text("Apply")'
   ], DEFAULT_TIMEOUT_MS);
 
@@ -201,6 +202,18 @@ function amazonFreshSearchUrl(query) {
 async function extractResultCards(page, query, zip, source, limit) {
   return page.evaluate(({ limit: resultLimit, query: productQuery, source: resultSource, zip: resultZip }) => {
     const clean = (value) => value?.replace(/\s+/g, ' ').trim() || '';
+    const first = (root, selectors) => {
+      for (const selector of selectors) {
+        try {
+          const match = root.querySelector(selector);
+          if (match) return match;
+        } catch {
+          // Some hosted browser builds are pickier about selector syntax.
+        }
+      }
+
+      return null;
+    };
     const absolutize = (href) => {
       try {
         return href ? new URL(href, location.origin).toString() : location.href;
@@ -214,9 +227,25 @@ async function extractResultCards(page, query, zip, source, limit) {
         const sku = card.getAttribute('data-asin')?.trim();
         if (!sku) return null;
 
-        const titleEl = card.querySelector('h2 span, h2 a span, [data-cy="title-recipe"] span, a[aria-label], [aria-label]');
-        const linkEl = card.querySelector('h2 a[href], a.a-link-normal.s-no-outline[href], a[href*="/dp/"], a[href*="/gp/product/"]');
-        const priceEl = card.querySelector('.a-price .a-offscreen, [data-a-color="price"] .a-offscreen, .a-color-price, [class*="price"] .a-offscreen');
+        const titleEl = first(card, [
+          'h2 span',
+          'h2 a span',
+          '[data-cy="title-recipe"] span',
+          'a[aria-label]',
+          '[aria-label]'
+        ]);
+        const linkEl = first(card, [
+          'h2 a[href]',
+          'a.a-link-normal.s-no-outline[href]',
+          'a[href*="/dp/"]',
+          'a[href*="/gp/product/"]'
+        ]);
+        const priceEl = first(card, [
+          '.a-price .a-offscreen',
+          '[data-a-color="price"] .a-offscreen',
+          '.a-color-price',
+          '[class*="price"] .a-offscreen'
+        ]);
         const title = clean(titleEl?.textContent) || clean(titleEl?.getAttribute?.('aria-label')) || clean(linkEl?.textContent);
         const price = clean(priceEl?.textContent);
 

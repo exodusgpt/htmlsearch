@@ -117,7 +117,7 @@ async function runAmazonJob(job) {
     job.progress = 'Completed.';
   } catch (error) {
     job.status = 'failed';
-    job.error = error.message;
+    job.error = job.progress ? `${job.progress} ${error.message}` : error.message;
     job.progress = 'Failed.';
   } finally {
     job.finishedAt = new Date().toISOString();
