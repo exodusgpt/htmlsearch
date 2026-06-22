@@ -52,14 +52,6 @@ async function textContent(locator) {
   }
 }
 
-async function attribute(locator, name) {
-  try {
-    return await locator.first().getAttribute(name, { timeout: 2500 });
-  } catch {
-    return null;
-  }
-}
-
 async function clickFirst(page, selectors, timeout = 3500) {
   for (const selector of selectors) {
     const locator = page.locator(selector).first();
@@ -206,6 +198,46 @@ function amazonFreshSearchUrl(query) {
   return url.toString();
 }
 
+async function extractResultCards(page, query, zip, source, limit) {
+  return page.evaluate(({ limit: resultLimit, query: productQuery, source: resultSource, zip: resultZip }) => {
+    const clean = (value) => value?.replace(/\s+/g, ' ').trim() || '';
+    const absolutize = (href) => {
+      try {
+        return href ? new URL(href, location.origin).toString() : location.href;
+      } catch {
+        return location.href;
+      }
+    };
+
+    return [...document.querySelectorAll('[data-asin]')]
+      .map((card) => {
+        const sku = card.getAttribute('data-asin')?.trim();
+        if (!sku) return null;
+
+        const titleEl = card.querySelector('h2 span, h2 a span, [data-cy="title-recipe"] span, a[aria-label], [aria-label]');
+        const linkEl = card.querySelector('h2 a[href], a.a-link-normal.s-no-outline[href], a[href*="/dp/"], a[href*="/gp/product/"]');
+        const priceEl = card.querySelector('.a-price .a-offscreen, [data-a-color="price"] .a-offscreen, .a-color-price, [class*="price"] .a-offscreen');
+        const title = clean(titleEl?.textContent) || clean(titleEl?.getAttribute?.('aria-label')) || clean(linkEl?.textContent);
+        const price = clean(priceEl?.textContent);
+
+        if (!title && !price) return null;
+
+        return {
+          zip: resultZip,
+          query: productQuery,
+          sku,
+          title: title || sku,
+          price: price || 'Not found',
+          source: resultSource,
+          url: absolutize(linkEl?.getAttribute('href'))
+        };
+      })
+      .filter(Boolean)
+      .filter((row, index, rows) => rows.findIndex((candidate) => candidate.sku === row.sku) === index)
+      .slice(0, resultLimit);
+  }, { limit, query, source, zip });
+}
+
 async function extractSearchResults(page, productName, zip, limit) {
   await page.waitForTimeout(500);
   const url = amazonFreshSearchUrl(productName);
@@ -215,33 +247,11 @@ async function extractSearchResults(page, productName, zip, limit) {
   await detectBlock(page);
   await page.waitForSelector('[data-component-type="s-search-result"], [data-asin]', { timeout: DEFAULT_TIMEOUT_MS }).catch(() => {});
 
-  const cards = page.locator('[data-component-type="s-search-result"][data-asin]');
-  const count = Math.min(await cards.count(), limit);
-  const rows = [];
+  const rows = await extractResultCards(page, productName, zip, 'amazon-fresh-search', limit);
 
-  if (!count) {
+  if (!rows.length) {
     const diagnostic = await pageDiagnostic(page);
     throw new Error(`No Amazon Fresh result cards for "${productName}" in ZIP ${zip}. Before search: "${diagnosticBefore.title}". Search page: "${diagnostic.title}" at ${diagnostic.url}. Text: ${diagnostic.text}`);
-  }
-
-  for (let index = 0; index < count; index += 1) {
-    const card = cards.nth(index);
-    const sku = await attribute(card, 'data-asin');
-    if (!sku) continue;
-
-    const title = await textContent(card.locator('h2 span, h2 a span, [data-cy="title-recipe"] span'));
-    const price = await textContent(card.locator('.a-price .a-offscreen, [data-a-color="price"] .a-offscreen, .a-color-price'));
-    const productUrl = await attribute(card.locator('h2 a, a.a-link-normal.s-no-outline'), 'href');
-
-    rows.push({
-      zip,
-      query: productName,
-      sku,
-      title,
-      price: price || 'Not found',
-      source: 'amazon-fresh-search',
-      url: productUrl ? new URL(productUrl, AMAZON_ORIGIN).toString() : url
-    });
   }
 
   return rows;
@@ -254,26 +264,14 @@ async function extractSku(page, sku, zip) {
   await detectBlock(page);
   await page.waitForSelector('[data-component-type="s-search-result"], [data-asin]', { timeout: DEFAULT_TIMEOUT_MS }).catch(() => {});
 
-  const card = page.locator(`[data-component-type="s-search-result"][data-asin="${sku}"]`).first();
-  const found = await card.count().catch(() => 0);
+  const rows = await extractResultCards(page, sku, zip, 'amazon-fresh-sku-search', 20);
+  const row = rows.find((result) => result.sku === sku);
 
-  if (!found) {
+  if (!row) {
     throw new Error(`SKU/ASIN ${sku} was not found in Amazon Fresh results for ZIP ${zip}.`);
   }
 
-  const title = await textContent(card.locator('h2 span, h2 a span, [data-cy="title-recipe"] span'));
-  const price = await textContent(card.locator('.a-price .a-offscreen, [data-a-color="price"] .a-offscreen, .a-color-price'));
-  const productUrl = await attribute(card.locator('h2 a, a.a-link-normal.s-no-outline'), 'href');
-
-  return {
-    zip,
-    query: sku,
-    sku,
-    title,
-    price: price || 'Not found',
-    source: 'amazon-fresh-sku-search',
-    url: productUrl ? new URL(productUrl, AMAZON_ORIGIN).toString() : url
-  };
+  return row;
 }
 
 export async function scanAmazonPrices({ chromium, ...input }) {
